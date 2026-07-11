@@ -16,6 +16,14 @@ const UserSchema = new mongoose.Schema({
   password: {
     type: String,
     required: true
+  },
+
+  // ◄ Add these two transient fields for security tracking
+  resetPasswordToken: { 
+    type: String 
+  },
+  resetPasswordExpires: { 
+    type: Date 
   }
 }, { timestamps: true });
 

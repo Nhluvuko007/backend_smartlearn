@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto'); // Built-in Node library for secure tokens
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -75,6 +76,80 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ message: 'Login authentication error', error: error.message });
+  }
+});
+
+// 1. FORGOT PASSWORD: Generate token and print link
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: 'Email address is required.' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Security Best Practice: Don't explicitly reveal that the email doesn't exist 
+      // to prevent account enumeration sniffing attacks.
+      return res.status(200).json({ message: 'If that email exists in our system, a recovery link has been generated.' });
+    }
+
+    // Generate a secure 20-byte hex token string
+    const token = crypto.randomBytes(20).toString('hex');
+
+    // Save token and set expiration window to exactly 15 minutes from right now
+    user.resetPasswordToken = token;
+    user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; 
+    await user.save();
+
+    // The destination reset URL pointing to your live Vercel app frontend route
+    const resetUrl = `https://smartlearn-bice.vercel.app/reset-password/${token}`;
+
+    // 🔬 Temporary Debug Log: This lets you copy the link straight from Render logs to test!
+    console.log(`\n🔑 [RESET TOKEN GENERATED] for ${user.email}:\n👉 URL: ${resetUrl}\n`);
+
+    res.status(200).json({ 
+      message: 'If that email exists in our system, a recovery link has been generated.' 
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Error initiating password reset', error: error.message });
+  }
+});
+
+// 2. RESET PASSWORD: Verify token expiration window and update password
+router.post('/reset-password/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ message: 'New password value is required.' });
+    }
+
+    // Find a user who has this token AND where the expiration date is greater than right now
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() } // $gt = Greater Than Current Time
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Password reset token is invalid or has expired.' });
+    }
+
+    // Hash the new secure password credentials
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+
+    // Wipe out the transient recovery tokens so they can never be reused
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.status(200).json({ message: 'Password updated successfully! You can now log in.' });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Error rewriting account password', error: error.message });
   }
 });
 
