@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: 'https://smartlearn-bice.vercel.app/',
+  origin: 'https://smartlearn-bice.vercel.app',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 }));
