@@ -82,74 +82,70 @@ router.post('/login', async (req, res) => {
 
 // 1. FORGOT PASSWORD: Generate token and dispatch email link
 router.post('/forgot-password', async (req, res) => {
+  console.log("🚀 [1/5] Forgot password request received for email:", req.body.email);
   try {
     const { email } = req.body;
     if (!email) {
+      console.log("⚠️ Validation failed: No email provided");
       return res.status(400).json({ message: 'Email address is required.' });
     }
 
+    console.log("🔍 [2/5] Querying MongoDB for user...");
     const user = await User.findOne({ email });
     if (!user) {
-      // Security Best Practice: Don't explicitly reveal missing accounts
+      console.log("ℹ️ User not found in database. Returning safe 200 response.");
       return res.status(200).json({ message: 'If that email exists in our system, a recovery link has been generated.' });
     }
+    console.log(`✅ User found: ${user.username} (${user._id})`);
 
-    // Generate a secure 20-byte hex token string
+    console.log("🎲 [3/5] Generating secure token & setting expiration...");
     const token = crypto.randomBytes(20).toString('hex');
-
-    // Save token and set expiration window to exactly 15 minutes from right now
     user.resetPasswordToken = token;
     user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; 
-    await user.save();
 
-    // The destination reset URL pointing to your live Vercel app frontend route
+    console.log("💾 Saving token state to MongoDB...");
+    await user.save();
+    console.log("✅ Database save successful!");
+
     const resetUrl = `https://smartlearn-bice.vercel.app/reset-password/${token}`;
 
-    // 2. Configure Nodemailer Transporter using env variables
+    console.log("📧 [4/5] Building Nodemailer transporter...");
     const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: parseInt(process.env.EMAIL_PORT || '587'),
+      host: 'smtp.gmail.com',
+      port: 587,
       secure: false, 
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
       tls: {
-        // This prevents cloud firewalls from blocking self-signed security handshake requests
-        rejectUnauthorized: false 
+        rejectUnauthorized: false
       }
     });
 
-    // 3. Draft the email payload with clean visual styles
     const mailOptions = {
       from: `"SmartLearn Support" <${process.env.EMAIL_USER}>`,
       to: user.email,
       subject: '🧠 SmartLearn - Password Reset Request',
-      html: `
-        <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
-          <h2 style="color: #1e3a8a; text-align: center;">🧠 SmartLearn</h2>
-          <p>Hello, <strong>${user.username}</strong>,</p>
-          <p>We received a request to reset your password. Click the button below to configure your new credentials. This security link expires in <strong>15 minutes</strong>.</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${resetUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset Password</a>
-          </div>
-          <p style="color: #64748b; font-size: 0.85rem;">If the button doesn't work, copy and paste this link into your browser:</p>
-          <p style="color: #2563eb; font-size: 0.85rem; word-break: break-all;">${resetUrl}</p>
-          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-          <p style="color: #94a3b8; font-size: 0.8rem; text-align: center;">If you did not request this, you can safely ignore this email.</p>
-        </div>
-      `,
+      html: `<p>Click here to reset your password: <a href="${resetUrl}">${resetUrl}</a></p>`,
     };
 
-    // 4. Fire off the email over the network
-    await transporter.sendMail(mailOptions);
+    console.log("✈️ Attempting to dispatch email over network...");
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log("✉️ [5/5] Recovery email dispatched cleanly!");
+    } catch (emailError) {
+      console.error('❌ Nodemailer email delivery failed:', emailError.message);
+      console.log(`👉 FALLBACK LOGGED LINK: ${resetUrl}`);
+    }
 
-    res.status(200).json({ 
-      message: 'Please check your mailbox, a recovery link has been sent.' 
+    return res.status(200).json({ 
+      message: 'If that email exists in our system, a recovery link has been generated.' 
     });
 
   } catch (error) {
-    res.status(500).json({ message: 'Error initiating password reset email pipeline', error: error.message });
+    console.error("🔥 CRITICAL CONTROLLER CRASH:", error);
+    return res.status(500).json({ message: 'Internal server processing error', error: error.message });
   }
 });
 
