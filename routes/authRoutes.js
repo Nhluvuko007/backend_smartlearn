@@ -3,11 +3,14 @@ const router = express.Router();
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const User = require('../models/User');
 
 // Secret token fallback signature string if .env is missing it
 const JWT_SECRET = process.env.JWT_SECRET || 'smartlearn_ultra_secure_fallback_key';
+
+// Initialize Resend with your environment API Key
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // 1. REGISTER NEW USER ACCOUNT
 router.post('/register', async (req, res) => {
@@ -80,62 +83,51 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// 1. FORGOT PASSWORD: Generate token and dispatch email link
+// 1. FORGOT PASSWORD: Generate token and dispatch email link via Resend API
 router.post('/forgot-password', async (req, res) => {
-  console.log("🚀 [1/5] Forgot password request received for email:", req.body.email);
+  console.log("🚀 Forgot password request received for email:", req.body.email);
   try {
     const { email } = req.body;
     if (!email) {
-      console.log("⚠️ Validation failed: No email provided");
       return res.status(400).json({ message: 'Email address is required.' });
     }
 
-    console.log("🔍 [2/5] Querying MongoDB for user...");
     const user = await User.findOne({ email });
     if (!user) {
-      console.log("ℹ️ User not found in database. Returning safe 200 response.");
       return res.status(200).json({ message: 'If that email exists in our system, a recovery link has been generated.' });
     }
-    console.log(`✅ User found: ${user.username} (${user._id})`);
 
-    console.log("🎲 [3/5] Generating secure token & setting expiration...");
     const token = crypto.randomBytes(20).toString('hex');
     user.resetPasswordToken = token;
     user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; 
-
-    console.log("💾 Saving token state to MongoDB...");
     await user.save();
-    console.log("✅ Database save successful!");
 
     const resetUrl = `https://smartlearn-bice.vercel.app/reset-password/${token}`;
 
-    console.log("📧 [4/5] Building Nodemailer transporter...");
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, 
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-
-    const mailOptions = {
-      from: `"SmartLearn Support" <${process.env.EMAIL_USER}>`,
-      to: user.email,
-      subject: '🧠 SmartLearn - Password Reset Request',
-      html: `<p>Click here to reset your password: <a href="${resetUrl}">${resetUrl}</a></p>`,
-    };
-
-    console.log("✈️ Attempting to dispatch email over network...");
+    console.log("✈️ Attempting to dispatch email over Resend API...");
     try {
-      await transporter.sendMail(mailOptions);
-      console.log("✉️ [5/5] Recovery email dispatched cleanly!");
+      // 2. Send email via HTTPS using Resend
+      await resend.emails.send({
+        // NOTE: On the free tier without a custom domain, you MUST use 'onboarding@resend.dev'
+        from: 'SmartLearn <onboarding@resend.dev>',
+        to: user.email, // On the free tier, this must be the email you signed up to Resend with!
+        subject: '🧠 SmartLearn - Password Reset Request',
+        html: `
+          <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+            <h2 style="color: #1e3a8a; text-align: center;">🧠 SmartLearn</h2>
+            <p>Hello, <strong>${user.username}</strong>,</p>
+            <p>We received a request to reset your password. Click the button below to configure your new credentials. This link expires in 15 minutes.</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${resetUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset Password</a>
+            </div>
+            <p style="color: #64748b; font-size: 0.85rem;">If the button doesn't work, copy and paste this link into your browser:</p>
+            <p style="color: #2563eb; font-size: 0.85rem; word-break: break-all;">${resetUrl}</p>
+          </div>
+        `,
+      });
+      console.log("✉️ Recovery email dispatched cleanly via Resend!");
     } catch (emailError) {
-      console.error('❌ Nodemailer email delivery failed:', emailError.message);
+      console.error('❌ Resend API delivery failed:', emailError.message);
       console.log(`👉 FALLBACK LOGGED LINK: ${resetUrl}`);
     }
 
