@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const crypto = require('crypto'); // Built-in Node library for secure tokens
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 const User = require('../models/User');
 
 // Secret token fallback signature string if .env is missing it
@@ -79,7 +80,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// 1. FORGOT PASSWORD: Generate token and print link
+// 1. FORGOT PASSWORD: Generate token and dispatch email link
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -89,8 +90,7 @@ router.post('/forgot-password', async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      // Security Best Practice: Don't explicitly reveal that the email doesn't exist 
-      // to prevent account enumeration sniffing attacks.
+      // Security Best Practice: Don't explicitly reveal missing accounts
       return res.status(200).json({ message: 'If that email exists in our system, a recovery link has been generated.' });
     }
 
@@ -105,15 +105,47 @@ router.post('/forgot-password', async (req, res) => {
     // The destination reset URL pointing to your live Vercel app frontend route
     const resetUrl = `https://smartlearn-bice.vercel.app/reset-password/${token}`;
 
-    // 🔬 Temporary Debug Log: This lets you copy the link straight from Render logs to test!
-    console.log(`\n🔑 [RESET TOKEN GENERATED] for ${user.email}:\n👉 URL: ${resetUrl}\n`);
+    // 2. Configure Nodemailer Transporter using env variables
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: parseInt(process.env.EMAIL_PORT || '465'),
+      secure: true, // true for 465, false for other ports
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    // 3. Draft the email payload with clean visual styles
+    const mailOptions = {
+      from: `"SmartLearn Support" <${process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: '🧠 SmartLearn - Password Reset Request',
+      html: `
+        <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <h2 style="color: #1e3a8a; text-align: center;">🧠 SmartLearn</h2>
+          <p>Hello, <strong>${user.username}</strong>,</p>
+          <p>We received a request to reset your password. Click the button below to configure your new credentials. This security link expires in <strong>15 minutes</strong>.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset Password</a>
+          </div>
+          <p style="color: #64748b; font-size: 0.85rem;">If the button doesn't work, copy and paste this link into your browser:</p>
+          <p style="color: #2563eb; font-size: 0.85rem; word-break: break-all;">${resetUrl}</p>
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+          <p style="color: #94a3b8; font-size: 0.8rem; text-align: center;">If you did not request this, you can safely ignore this email.</p>
+        </div>
+      `,
+    };
+
+    // 4. Fire off the email over the network
+    await transporter.sendMail(mailOptions);
 
     res.status(200).json({ 
-      message: 'If that email exists in our system, a recovery link has been generated.' 
+      message: 'Please check your mailbox, a recovery link has been sent.' 
     });
 
   } catch (error) {
-    res.status(500).json({ message: 'Error initiating password reset', error: error.message });
+    res.status(500).json({ message: 'Error initiating password reset email pipeline', error: error.message });
   }
 });
 

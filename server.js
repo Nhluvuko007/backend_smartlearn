@@ -38,19 +38,6 @@ app.get('/', (req, res) => {
   res.send('Smart Learning Platform Express Server is running smoothly!');
 });
 
-// Add this temporary snippet to print out all registered endpoints on startup
-console.log("=== REGISTERED ROUTES ===");
-app._router.stack.forEach((r) => {
-  if (r.route && r.route.path) {
-    console.log(`Route: ${Object.keys(r.route.methods).toUpperCase()} ${r.route.path}`);
-  } else if (r.name === 'router') {
-    r.handle.stack.forEach((handler) => {
-      if (handler.route) {
-        console.log(`Auth Route: ${Object.keys(handler.route.methods).join(',').toUpperCase()} ${handler.route.path}`);
-      }
-    });
-  }
-});
 
 // Start listening for traffic
 app.listen(PORT, () => {
