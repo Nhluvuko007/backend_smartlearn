@@ -108,12 +108,16 @@ router.post('/forgot-password', async (req, res) => {
     // 2. Configure Nodemailer Transporter using env variables
     const transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
-      port: parseInt(process.env.EMAIL_PORT || '465'),
-      secure: true, // true for 465, false for other ports
+      port: parseInt(process.env.EMAIL_PORT || '587'),
+      secure: false, 
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      tls: {
+        // This prevents cloud firewalls from blocking self-signed security handshake requests
+        rejectUnauthorized: false 
+      }
     });
 
     // 3. Draft the email payload with clean visual styles
