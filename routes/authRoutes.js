@@ -83,7 +83,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// 1. FORGOT PASSWORD: Generate token and dispatch email link via Resend API
+// 1. FORGOT PASSWORD: Generate token and send email link via Resend API
 router.post('/forgot-password', async (req, res) => {
   console.log("🚀 Forgot password request received for email:", req.body.email);
   try {
@@ -94,7 +94,7 @@ router.post('/forgot-password', async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(200).json({ message: 'If that email exists in our system, a recovery link has been generated.' });
+      return res.status(200).json({ message: 'Please note the email with a recovery link has been sent.' });
     }
 
     const token = crypto.randomBytes(20).toString('hex');
@@ -108,9 +108,8 @@ router.post('/forgot-password', async (req, res) => {
     try {
       // 2. Send email via HTTPS using Resend
       await resend.emails.send({
-        // NOTE: On the free tier without a custom domain, you MUST use 'onboarding@resend.dev'
         from: 'SmartLearn <onboarding@resend.dev>',
-        to: user.email, // On the free tier, this must be the email you signed up to Resend with!
+        to: user.email,
         subject: '🧠 SmartLearn - Password Reset Request',
         html: `
           <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
@@ -132,7 +131,7 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     return res.status(200).json({ 
-      message: 'If that email exists in our system, a recovery link has been generated.' 
+      message: 'Please note the email with a recovery link has been sent.' 
     });
 
   } catch (error) {
