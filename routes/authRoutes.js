@@ -16,7 +16,11 @@ const authenticateToken = (req, res, next) => {
   if (!token) return res.status(401).json({ message: 'Access denied' });
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ message: 'Invalid token' });
+    if (err) {
+      // THIS LOG WILL TELL US IF THE PATCH REQUEST IS EVEN VALIDATING
+      console.log("Auth attempt: Token verification failed for", req.method, req.url, "Error:", err.message);
+      return res.status(403).json({ message: 'Invalid token' });
+    }
     req.user = user;
     next();
   });
