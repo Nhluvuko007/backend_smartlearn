@@ -7,7 +7,7 @@ const { Resend } = require('resend');
 const User = require('../models/User');
 
 // Secret token fallback signature string if .env is missing it
-const JWT_SECRET = 'force-this-string-to-be-the-same-everywhere';
+const JWT_SECRET = process.env.JWT_SECRET || 'smartlearn_ultra_secure_fallback_key';
 
 // Middleware to verify the JWT (add this at the top of the file)
 const authenticateToken = (req, res, next) => {
