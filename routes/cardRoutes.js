@@ -70,11 +70,13 @@ router.post('/:cardId/review', auth, async (req, res) => {
     }
 
     const pythonPayload = {
-      repetitions: card.repetitions,
-      interval: card.interval,
-      ease_factor: card.easeFactor,
+      repetitions: card.repetitions || 0,
+      interval: card.interval || 0,
+      ease_factor: card.easeFactor || 2.5,
       rating: rating
     };
+
+    console.log(`Attempting to contact Python service at: ${PYTHON_SERVICE_URL}`);
 
     // Swapped hardcoded localhost for our production variable link string
     const pythonResponse = await axios.post(`${PYTHON_SERVICE_URL}/api/algorithm/review`, pythonPayload);
@@ -90,7 +92,15 @@ router.post('/:cardId/review', auth, async (req, res) => {
     res.status(200).json({ message: 'Review recorded successfully', card: updatedCard });
 
   } catch (error) {
-    res.status(500).json({ message: 'Error processing review computation', error: error.message });
+    if (error.response) {
+      console.error('Python Service Error Response:', error.response.data);
+      res.status(500).json({ message: 'Python service rejected the request', details: error.response.data });
+    } else if (error.request) {
+      console.error('No response received from Python service. Is it running?');
+      res.status(500).json({ message: 'Could not connect to Python service' });
+    } else {
+      res.status(500).json({ message: 'Error processing review computation', error: error.message });
+    }
   }
 });
 
