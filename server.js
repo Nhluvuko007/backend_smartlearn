@@ -18,8 +18,12 @@ const PORT = process.env.PORT || 5000;
 app.use(cors({
   origin: 'https://smartlearn-bice.vercel.app',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
+
+// Add this if your framework (Express) blocks preflight explicitly
+app.options('*', cors());
 
 app.use(express.json()); // Essential for handling incoming JSON data
 
