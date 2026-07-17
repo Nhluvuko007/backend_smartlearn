@@ -22,9 +22,6 @@ app.use(cors({
   credentials: true
 }));
 
-// Add this if your framework (Express) blocks preflight explicitly
-app.options('*', cors());
-
 app.use(express.json()); // Essential for handling incoming JSON data
 
 // Establish MongoDB Connection
