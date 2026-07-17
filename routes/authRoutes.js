@@ -9,6 +9,19 @@ const User = require('../models/User');
 // Secret token fallback signature string if .env is missing it
 const JWT_SECRET = process.env.JWT_SECRET || 'smartlearn_ultra_secure_fallback_key';
 
+// Middleware to verify the JWT (add this at the top of the file)
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'Access denied' });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ message: 'Invalid token' });
+    req.user = user;
+    next();
+  });
+};
+
 // Initialize Resend with your environment API Key
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -173,6 +186,32 @@ router.post('/reset-password/:token', async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ message: 'Error rewriting account password', error: error.message });
+  }
+});
+
+// GET Profile - Fetch user details
+router.get('/profile', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).select('-password');
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching profile' });
+  }
+});
+
+// UPDATE Profile - Change username or email
+router.patch('/profile', authenticateToken, async (req, res) => {
+  try {
+    const { username, email } = req.body;
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.userId,
+      { username, email },
+      { new: true }
+    ).select('-password');
+    
+    res.json(updatedUser);
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating profile' });
   }
 });
 
